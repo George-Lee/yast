@@ -1,0 +1,76 @@
+service: yast
+
+plugins:
+  - serverless-python-requirements
+  - serverless-pseudo-parameters
+  - serverless-finch # TODO for frontent
+  - serverless-localstack
+
+provider:
+  name: aws
+  runtime: python3.8
+  endpointType: REGIONAL
+  region: #{AWS::Region}
+
+  iamRoleStatements:
+    - Effect: "Allow"
+      Action:
+        - dynamodb:DescribeTable
+        - dynamodb:Scan
+        - dynamodb:Query
+        - dynamodb:GetItem
+        - dynamodb:PutItem
+        - dynamodb:UpdateItem
+        - dynamodb:DeleteItem
+      Resource:
+        - "arn:aws:dynamodb:#{AWS::Region}:#{AWS::AccountId}:table/yast*"
+
+package:
+  exclude:
+    - node_modules/**
+
+functions:
+  web:
+    timeout: 29
+    handler: backend.handler.handler
+    events:
+      - http:
+          method: any
+          path: /{proxy+}
+
+resources:
+  Resources:
+    YASTTable:
+      Type: AWS::DynamoDB::Table
+      Properties:
+        TableName: yast
+        AttributeDefinitions:
+          - AttributeName: hash_key
+            AttributeType: S
+          - AttributeName: range_key
+            AttributeType: S
+          - AttributeName: uuid
+            AttributeType: S
+        KeySchema:
+          - AttributeName: hash_key
+            KeyType: HASH
+          - AttributeName: range_key
+            KeyType: RANGE
+        BillingMode: PAY_PER_REQUEST
+        GlobalSecondaryIndexes:
+          - IndexName: individual_sheets
+            KeySchema:
+              - AttributeName: uuid
+                KeyType: HASH
+              - AttributeName: hash_key
+                KeyType: RANGE
+            Projection:
+              ProjectionType: ALL
+
+custom:
+  pythonRequirements:
+    dockerizePip: non-linux
+  localstack:
+    stages:
+      - local
+    host: http://localhost
